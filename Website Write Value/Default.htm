@@ -1,0 +1,273 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>TcAdsWebService.js Sample01</title>
+    <script type="text/javascript" src="TcAdsWebService.js"></script>
+    <script type="text/javascript">
+        (function () {
+
+            var NETID = ""; // Empty string for local machine;
+            var PORT = "851"; // PLC Runtime
+            var SERVICE_URL = "http://localhost/TcAdsWebService/TcAdsWebService.dll"; // HTTP path to the TcAdsWebService;
+
+            var client = new TcAdsWebService.Client(SERVICE_URL, null, null);
+
+            var general_timeout = 500;
+
+            // Array of symbol names to read;
+            var handlesVarNames = [
+                    "MAIN.byteValue",
+                    "MAIN.wordValue",
+                    "MAIN.dwordValue",
+                    "MAIN.sintValue",
+                    "MAIN.intValue",
+                    "MAIN.dintValue",
+                    "MAIN.realValue",
+                    "MAIN.lrealValue",
+                    "MAIN.myValue",
+                    "MAIN.myValue2"
+                ];
+
+            var handlesVarSizes = [ 1, 2, 4, 1, 2, 4, 4, 8, 1, 4 ];
+
+            var handles = [];
+
+
+            // Occurs if the window has loaded;
+            window.onload = (function () {
+
+                // Register ui events
+                btnWrite.onclick = BtnWriteClicked;
+
+                // Create sumcommando for reading twincat symbol handles by symbol name;
+                var handleswriter = new TcAdsWebService.DataWriter();
+
+                // Write general information for each symbol handle to the TcAdsWebService.DataWriter object;
+                for (var i = 0; i < handlesVarNames.length; i++) {
+                    handleswriter.writeDINT(TcAdsWebService.TcAdsReservedIndexGroups.SymbolHandleByName);
+                    handleswriter.writeDINT(0);
+                    handleswriter.writeDINT(4); // Expected size; A handle has a size of 4 byte;
+                    handleswriter.writeDINT(handlesVarNames[i].length); // The length of the symbol name string;
+                }
+
+                // Write symbol names after the general information to the TcAdsWebService.DataWriter object;
+                for (var i = 0; i < handlesVarNames.length; i++) {
+                    handleswriter.writeString(handlesVarNames[i]);
+                }
+
+                // Send the list-read-write command to the TcAdsWebService by use of the readwrite function of the TcAdsWebService.Client object;
+                client.readwrite(
+                    NETID,
+                    PORT,
+                    0xF082, 	// IndexGroup = ADS list-read-write command; Used to request handles for twincat symbols;
+                    handlesVarNames.length, // IndexOffset = Count of requested symbol handles;
+                    (handlesVarNames.length * 4) + (handlesVarNames.length * 8), // Length of requested data + 4 byte errorcode and 4 byte length per twincat symbol;
+                    handleswriter.getBase64EncodedData(),
+                    RequestHandlesCallback,
+                    null,
+                    general_timeout,
+                    RequestHandlesTimeoutCallback,
+                    true);
+
+            });
+
+            // Occurs if the readwrite for the sumcommando has finished;
+            var RequestHandlesCallback = (function (e, s) {
+
+                if (e && e.isBusy) {
+                    // HANDLE PROGRESS TASKS HERE;
+                    var message = "Requesting symbol handles...";
+                    div_log.innerHTML = message;
+                    // Exit callback function because request is still busy;
+                    return;
+                }
+
+                if (e && !e.hasError) {
+
+                    // Get TcAdsWebService.DataReader object from TcAdsWebService.Response object;
+                    var reader = e.reader;
+
+                    // Read error code and length for each handle;
+                    for (var i = 0; i < handlesVarNames.length; i++) {
+
+                        var err = reader.readDWORD();
+                        var len = reader.readDWORD();
+
+                        if (err != 0) {
+                            div_log.innerHTML = "Symbol handle error!";
+                            return;
+                        }
+
+                    }
+
+                    var message = "Symbol handles successfully created!";
+                    div_log.innerHTML = message;
+
+                    // Read handles from TcAdsWebService.DataReader object;
+                    handles[0] = reader.readDWORD();
+                    handles[1] = reader.readDWORD();
+                    handles[2] = reader.readDWORD();
+                    handles[3] = reader.readDWORD();
+                    handles[4] = reader.readDWORD();
+                    handles[5] = reader.readDWORD();
+                    handles[6] = reader.readDWORD();
+                    handles[7] = reader.readDWORD();
+                    handles[8] = reader.readDWORD();
+                    handles[9] = reader.readDWORD();
+
+                } else {
+
+                    if (e.error.getTypeString() == "TcAdsWebService.ResquestError") {
+                        // HANDLE TcAdsWebService.ResquestError HERE;
+                        div_log.innerHTML = "Error: StatusText = " + e.error.statusText + " Status: " + e.error.status;
+                    }
+                    else if (e.error.getTypeString() == "TcAdsWebService.Error") {
+                        // HANDLE TcAdsWebService.Error HERE;
+                        div_log.innerHTML = "Error: ErrorMessage = " + e.error.errorMessage + " ErrorCode: " + e.error.errorCode;
+                    }
+
+                }
+
+            });
+
+            // Occurs if the readwrite for the sumcommando to request symbol handles runs into timeout;
+            var RequestHandlesTimeoutCallback = (function () {
+                // HANDLE TIMEOUT HERE;
+                div_log.innerHTML = "Requuest symbol handles timeout!";
+            });
+
+              var BtnWriteClicked = (function () {
+
+                // Create TcAdsWebService.DataWriter for write-read-write command.
+                var writer = new TcAdsWebService.DataWriter();
+
+                // Write general write-read-write commando information to TcAdsWebService.DataWriter object;
+
+                var temp=[Text1.value, Text2.value, Text3.value, Text4.value, Text5.value, Text6.value, Text7.value, Text8.value, Text9.value, Text10.value];
+                var size = 0;
+                var numberOfVar =0;
+                for (var i = 0; i < handles.length; i++) {
+                    if (temp[i]!=="")
+                    {
+                        writer.writeDINT(TcAdsWebService.TcAdsReservedIndexGroups.SymbolValueByHandle);
+                        writer.writeDINT(handles[i]);
+                        writer.writeDINT(handlesVarSizes[i]);
+                        size = size + handlesVarSizes[i];
+                        numberOfVar = numberOfVar +1;
+                    }                    
+                }
+
+                // Write values to TcAdsWebService.DataWrite object;
+                if (temp[0]!=="") writer.writeBYTE(parseFloat(Text1.value));                
+                if (temp[1]!=="") writer.writeWORD(parseFloat(Text2.value));
+                if (temp[2]!=="") writer.writeDWORD(parseFloat(Text3.value));
+                if (temp[3]!=="") writer.writeSINT(parseFloat(Text4.value));
+                if (temp[4]!=="") writer.writeINT(parseFloat(Text5.value));
+                if (temp[5]!=="") writer.writeDINT(parseFloat(Text6.value));
+                if (temp[6]!=="") writer.writeREAL(parseFloat(Text7.value));
+                if (temp[7]!=="") writer.writeLREAL(parseFloat(Text8.value));
+                if (temp[8]!=="") writer.writeBYTE(parseFloat(Text9.value));
+                if (temp[9]!=="") writer.writeDINT(parseFloat(Text10.value));                
+                
+
+                client.readwrite(
+                        NETID,
+                        PORT,
+                        0xF081, // 0xF081 = Call Write SumCommando
+                        numberOfVar,//handles.length, // IndexOffset = Count of requested variables.
+                        size+(numberOfVar*4), // Length of requested data + 4 byte errorcode per variable.
+                        writer.getBase64EncodedData(),
+                        WriteCallback,
+                        null,
+                        general_timeout,
+                        WriteTimeoutCallback,
+                        true);
+            });
+
+            var WriteCallback = (function(e,s){
+
+                if (e && e.isBusy) {
+                    // HANDLE PROGRESS TASKS HERE;
+                    var message = "Writing data to plc...";
+                    div_log.innerHTML = message;
+                    // Exit callback function because request is still busy;
+                    return;
+                }
+
+                if (e && !e.hasError) {
+
+                    var message = "Writing data successfully finished...";
+                    div_log.innerHTML = message;
+
+                } else {
+
+                    if (e.error.getTypeString() == "TcAdsWebService.ResquestError") {
+                        // HANDLE TcAdsWebService.ResquestError HERE;
+                        div_log.innerHTML = "Error: StatusText = " + e.error.statusText + " Status: " + e.error.status;
+                    }
+                    else if (e.error.getTypeString() == "TcAdsWebService.Error") {
+                        // HANDLE TcAdsWebService.Error HERE;
+                        div_log.innerHTML = "Error: ErrorMessage = " + e.error.errorMessage + " ErrorCode: " + e.error.errorCode;
+                    }
+
+                }
+            });
+
+            // Occurs if the write-read-write command runs into timeout;
+            var WriteTimeoutCallback = (function () {
+                // HANDLE TIMEOUT HERE;
+                div_log.innerHTML = "Write timeout!";
+            });
+
+        })();
+    </script>
+</head>
+<body>
+    <h1>TcAdsWebService.js Sample02</h1>
+    <h2>Write multiple variables with sumcommando!</h2>
+    <table>
+        <tr>
+            <td>MAIN.byteValue:</td>
+            <td><input id="Text1" type="text" /></td>
+        </tr>
+        <tr>
+            <td>MAIN.wordValue:</td>
+            <td><input id="Text2" type="text" /></td>
+        </tr>
+        <tr>
+            <td>MAIN.dwordValue:</td>
+            <td><input id="Text3" type="text" /></td>
+        </tr>
+        <tr>
+            <td>MAIN.sintValue:</td>
+            <td><input id="Text4" type="text" /></td>
+        </tr>
+        <tr>
+            <td>MAIN.intValue:</td>
+            <td><input id="Text5" type="text" /></td>
+        </tr>
+        <tr>
+            <td>MAIN.dintValue:</td>
+            <td><input id="Text6" type="text" /></td>
+        </tr>
+        <tr>
+            <td>MAIN.realValue:</td>
+            <td><input id="Text7" type="text" /></td>
+        </tr>
+        <tr>
+            <td>MAIN.lrealValue:</td>
+            <td><input id="Text8" type="text" /></td>
+        </tr>
+        <tr>
+            <td>MAIN.myValue (Byte):</td>
+            <td><input id="Text9" type="text" /></td>
+        </tr>
+        <tr>
+            <td>MAIN.myValue2 (DInt):</td>
+            <td><input id="Text10" type="text" /></td>
+        </tr>
+    </table>
+    <input type="button" id="btnWrite" value="Write Values to PLC" />
+    <div id="div_log"></div>
+</body>
+</html>

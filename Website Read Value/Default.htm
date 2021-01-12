@@ -1,0 +1,375 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>TcAdsWebService.js Sample01</title>
+    <script type="text/javascript" src="TcAdsWebService.js"></script>
+    <script type="text/javascript">
+        (function () {
+
+            var NETID = ""; // Empty string for local machine;
+            var PORT = "851"; // PLC Runtime
+            var SERVICE_URL = "http://localhost/TcAdsWebService/TcAdsWebService.dll"; // HTTP path to the TcAdsWebService;
+
+            var client = new TcAdsWebService.Client(SERVICE_URL, null, null);
+
+            var general_timeout = 500;
+
+            var readLoopID = null;
+            var readLoopDelay = 500;
+
+            var readSymbolValuesData = null;
+
+            // Array of symbol names to read;
+            var handlesVarNames = [
+                    "MAIN.byteValue",
+                    "MAIN.wordValue",
+                    "MAIN.dwordValue",
+                    "MAIN.sintValue",
+                    "MAIN.intValue",
+                    "MAIN.dintValue",
+                    "MAIN.realValue",
+                    "MAIN.lrealValue",
+                    "MAIN.myValue",
+                    "MAIN.myValue2"
+                ];
+
+            var handlesVarSizes =[ 1, 2, 4, 1, 2, 4, 4, 8, 1, 4];
+            var handles =[];
+            var size;
+
+            // Occurs if the window has loaded;
+            window.onload = (function () {
+
+                // Create sumcommando for reading twincat symbol handles by symbol name;
+                var handleswriter = new TcAdsWebService.DataWriter();
+
+                // Write general information for each symbol handle to the TcAdsWebService.DataWriter object;
+                for (var i = 0; i < handlesVarNames.length; i++) {
+                    handleswriter.writeDINT(TcAdsWebService.TcAdsReservedIndexGroups.SymbolHandleByName);
+                    handleswriter.writeDINT(0);
+                    handleswriter.writeDINT(4); // Expected size; A handle has a size of 4 byte;
+                    handleswriter.writeDINT(handlesVarNames[i].length); // The length of the symbol name string;
+                }
+
+                // Write symbol names after the general information to the TcAdsWebService.DataWriter object;
+                for (var i = 0; i < handlesVarNames.length; i++) {
+                    handleswriter.writeString(handlesVarNames[i]);
+                }
+
+                // Send the list-read-write command to the TcAdsWebService by use of the readwrite function of the TcAdsWebService.Client object;
+                client.readwrite(
+                    NETID,
+                    PORT,
+                    0xF082, 	// IndexGroup = ADS list-read-write command; Used to request handles for twincat symbols;
+                    handlesVarNames.length, // IndexOffset = Count of requested symbol handles;
+                    (handlesVarNames.length * 4) + (handlesVarNames.length * 8), // Length of requested data + 4 byte errorcode and 4 byte length per twincat symbol;
+                    handleswriter.getBase64EncodedData(),
+                    RequestHandlesCallback,
+                    null,
+                    general_timeout,
+                    RequestHandlesTimeoutCallback,
+                    true);
+
+            });
+
+            // Occurs if the readwrite for the sumcommando has finished;
+            var RequestHandlesCallback = (function (e, s) {
+
+                if (e && e.isBusy) {
+                    // HANDLE PROGRESS TASKS HERE;
+                    var message = "Requesting handles...";
+                    td_byteValue.innerHTML = message;
+                    td_wordValue.innerHTML = message;
+                    td_dwordValue.innerHTML = message;
+                    td_sintValue.innerHTML = message;
+                    td_intValue.innerHTML = message;
+                    td_dintValue.innerHTML = message;
+                    td_realValue.innerHTML = message;
+                    td_lrealValue.innerHTML = message;
+                    td_myValue.innerHTML = message;
+                    td_myValue2.innerHTML = message;
+                    // Exit callback function because request is still busy;
+                    return;
+                }
+
+                if (e && !e.hasError) {
+
+                    // Get TcAdsWebService.DataReader object from TcAdsWebService.Response object;
+                    var reader = e.reader;
+
+                    // Read error code and length for each handle;
+                    for (var i = 0; i < handlesVarNames.length; i++) {
+
+                        var err = reader.readDWORD();
+                        var len = reader.readDWORD();
+
+                        if (err != 0) {
+                            div_log.innerHTML = "Handle error!";
+                            return;
+                        }
+
+                    }
+
+                    // Read handles from TcAdsWebService.DataReader object;
+                    for (var i=0; i<handlesVarNames.length; i++){
+                        handles[i]=reader.readDWORD();
+                    }
+                    /*
+                    var hByteValue = reader.readDWORD();
+                    var hWordValue = reader.readDWORD();
+                    var hDwordValue = reader.readDWORD();
+                    var hSintValue = reader.readDWORD();
+                    var hIntValue = reader.readDWORD();
+                    var hDintValue = reader.readDWORD();
+                    var hRealValue = reader.readDWORD();
+                    var hLrealValue = reader.readDWORD();
+                    var hmyValue = reader.readDWORD();
+                    var hmyValue2 = reader.readDWORD();
+                    */
+                    // Create sum commando to read symbol values based on the handle
+                    var readSymbolValuesWriter = new TcAdsWebService.DataWriter();
+                    size =0;
+                    for (var i=0; i<handlesVarNames.length; i++){
+                        readSymbolValuesWriter.writeDINT(TcAdsWebService.TcAdsReservedIndexGroups.SymbolValueByHandle); // IndexGroup
+                        readSymbolValuesWriter.writeDINT(handles[i]); // IndexOffset = The target handle
+                        readSymbolValuesWriter.writeDINT(handlesVarSizes[i]); // size to read
+                        size = size + handlesVarSizes[i];
+                        
+                    }
+
+
+
+                    /*
+
+                    //  "MAIN.byteValue" // BYTE
+                    readSymbolValuesWriter.writeDINT(TcAdsWebService.TcAdsReservedIndexGroups.SymbolValueByHandle); // IndexGroup
+                    readSymbolValuesWriter.writeDINT(hByteValue); // IndexOffset = The target handle
+                    readSymbolValuesWriter.writeDINT(1); // size to read
+
+                    //  "MAIN.wordValue" // WORD
+                    readSymbolValuesWriter.writeDINT(TcAdsWebService.TcAdsReservedIndexGroups.SymbolValueByHandle); // IndexGroup
+                    readSymbolValuesWriter.writeDINT(hWordValue); // IndexOffset = The target handle
+                    readSymbolValuesWriter.writeDINT(2); // size to read
+
+                    //  "MAIN.dwordValue" // DWORD
+                    readSymbolValuesWriter.writeDINT(TcAdsWebService.TcAdsReservedIndexGroups.SymbolValueByHandle); // IndexGroup
+                    readSymbolValuesWriter.writeDINT(hDwordValue); // IndexOffset = The target handle
+                    readSymbolValuesWriter.writeDINT(4); // size to read
+
+                    //  "MAIN.sintValue" // SINT
+                    readSymbolValuesWriter.writeDINT(TcAdsWebService.TcAdsReservedIndexGroups.SymbolValueByHandle); // IndexGroup
+                    readSymbolValuesWriter.writeDINT(hSintValue); // IndexOffset = The target handle
+                    readSymbolValuesWriter.writeDINT(1); // size to read
+
+                    //  "MAIN.intValue" // INT
+                    readSymbolValuesWriter.writeDINT(TcAdsWebService.TcAdsReservedIndexGroups.SymbolValueByHandle); // IndexGroup
+                    readSymbolValuesWriter.writeDINT(hIntValue); // IndexOffset = The target handle
+                    readSymbolValuesWriter.writeDINT(2); // size to read
+
+                    //  "MAIN.dintValue" // DINT
+                    readSymbolValuesWriter.writeDINT(TcAdsWebService.TcAdsReservedIndexGroups.SymbolValueByHandle); // IndexGroup
+                    readSymbolValuesWriter.writeDINT(hDintValue); // IndexOffset = The target handle
+                    readSymbolValuesWriter.writeDINT(4); // size to read
+
+                    //  "MAIN.realValue" // REAL
+                    readSymbolValuesWriter.writeDINT(TcAdsWebService.TcAdsReservedIndexGroups.SymbolValueByHandle); // IndexGroup
+                    readSymbolValuesWriter.writeDINT(hRealValue); // IndexOffset = The target handle
+                    readSymbolValuesWriter.writeDINT(4); // size to read
+
+                    //  "MAIN.lrealValue" // LREAL
+                    readSymbolValuesWriter.writeDINT(TcAdsWebService.TcAdsReservedIndexGroups.SymbolValueByHandle); // IndexGroup
+                    readSymbolValuesWriter.writeDINT(hLrealValue); // IndexOffset = The target handle
+                    readSymbolValuesWriter.writeDINT(8); // size to read
+
+                    //  "MAIN.myValue" // BYTE
+                    readSymbolValuesWriter.writeDINT(TcAdsWebService.TcAdsReservedIndexGroups.SymbolValueByHandle); // IndexGroup
+                    readSymbolValuesWriter.writeDINT(hmyValue); // IndexOffset = The target handle
+                    readSymbolValuesWriter.writeDINT(1); // size to read
+
+                    //  "MAIN.myValue" // BYTE
+                    readSymbolValuesWriter.writeDINT(TcAdsWebService.TcAdsReservedIndexGroups.SymbolValueByHandle); // IndexGroup
+                    readSymbolValuesWriter.writeDINT(hmyValue2); // IndexOffset = The target handle
+                    readSymbolValuesWriter.writeDINT(4); // size to read
+                    */
+
+                    // Get Base64 encoded data from TcAdsWebService.DataWriter;
+                    readSymbolValuesData = readSymbolValuesWriter.getBase64EncodedData();
+
+                    // Start cyclic reading of symbol values;
+                    readLoopID = window.setInterval(ReadLoop, readLoopDelay);
+
+                } else {
+
+                    if (e.error.getTypeString() == "TcAdsWebService.ResquestError") {
+                        // HANDLE TcAdsWebService.ResquestError HERE;
+                        div_log.innerHTML = "Error: StatusText = " + e.error.statusText + " Status: " + e.error.status;
+                    }
+                    else if (e.error.getTypeString() == "TcAdsWebService.Error") {
+                        // HANDLE TcAdsWebService.Error HERE;
+                        div_log.innerHTML = "Error: ErrorMessage = " + e.error.errorMessage + " ErrorCode: " + e.error.errorCode;
+                    }
+
+                }
+
+            });
+
+            // Occurs if the readwrite for the sumcommando to request symbol handles runs into timeout;
+            var RequestHandlesTimeoutCallback = (function () {
+                // HANDLE TIMEOUT HERE;
+                div_log.innerHTML = "Requuest handles timeout!";
+            });
+
+            // Interval callback for cyclic reading;
+            var ReadLoop = (function () {
+                
+                // Send the read-read-write command to the TcAdsWebService by use of the readwrite function of the TcAdsWebService.Client object;
+                client.readwrite(
+                    NETID,
+                    PORT,
+                    0xF080, // 0xF080 = Read command;
+                    handlesVarNames.length, // IndexOffset = Variables count;
+                    size + ((handlesVarNames.length)* 4), // Length of requested data + 4 byte errorcode per variable;
+                    readSymbolValuesData,
+                    ReadCallback,
+                    null,
+                    general_timeout,
+                    ReadTimeoutCallback,
+                    true);
+
+            });
+
+            // Occurs if the read-read-write command has finished;
+            var ReadCallback = (function (e, s) {
+
+                if (e && e.isBusy) {
+                    // HANDLE PROGRESS TASKS HERE;
+                    // Exit callback function because request is still busy;
+                    return;
+                }
+
+                if (e && !e.hasError) {
+
+                    var reader = e.reader;
+                    
+                    // Read error codes from begin of TcAdsWebService.DataReader object;
+                    for (var i = 0; i < handlesVarNames.length; i++) {
+                        var err = reader.readDWORD();
+                        if (err != 0) {
+                            div_log.innerHTML = "Symbol error!";
+                            return;
+                        }
+                    }
+
+                    //  "MAIN.byteValue" // BYTE
+                    var byteValue = reader.readBYTE();
+
+                    //  "MAIN.wordValue" // WORD
+                    var wordValue = reader.readWORD();
+
+                    //  "MAIN.dwordValue" // DWORD
+                    var dwordValue = reader.readDWORD();
+
+                    //  "MAIN.sintValue" // SINT
+                    var sintValue = reader.readSINT();
+
+                    //  "MAIN.intValue" // INT
+                    var intValue = reader.readINT();
+
+                    //  "MAIN.dintValue" // DINT
+                    var dintValue = reader.readDINT();
+
+                    //  "MAIN.realValue" // REAL
+                    var realValue = reader.readREAL();
+
+                    //  "MAIN.lrealValue" // LREAL
+                    var lrealValue = reader.readLREAL();
+
+                    //  "MAIN.byteValue" // BYTE
+                    var myValue = reader.readBYTE();
+
+                    //  "MAIN.intValue" // INT
+                    var myValue2 = reader.readDINT();
+
+                    // Write data to the user interface;
+                    td_byteValue.innerHTML = byteValue;
+                    td_wordValue.innerHTML = wordValue;
+                    td_dwordValue.innerHTML = dwordValue;
+                    td_sintValue.innerHTML = sintValue;
+                    td_intValue.innerHTML = intValue;
+                    td_dintValue.innerHTML = dintValue;
+                    td_realValue.innerHTML = realValue;
+                    td_lrealValue.innerHTML = lrealValue;
+                    td_myValue.innerHTML = myValue;
+                    td_myValue2.innerHTML = myValue2;
+
+                } else {
+
+                    if (e.error.getTypeString() == "TcAdsWebService.ResquestError") {
+                        // HANDLE TcAdsWebService.ResquestError HERE;
+                        div_log.innerHTML = "Error: StatusText = " + e.error.statusText + " Status: " + e.error.status;
+                    }
+                    else if (e.error.getTypeString() == "TcAdsWebService.Error") {
+                        // HANDLE TcAdsWebService.Error HERE;
+                        div_log.innerHTML = "Error: ErrorMessage = " + e.error.errorMessage + " ErrorCode: " + e.error.errorCode;
+                    }
+                }
+
+            });
+            
+            // Occurs if the read-read-write command runs into timeout;
+            var ReadTimeoutCallback = (function () {
+                // HANDLE TIMEOUT HERE;
+                div_log.innerHTML = "Read timeout!";
+            });
+
+        })();
+    </script>
+</head>
+<body>
+    <h1>TcAdsWebService.js Sample01</h1>
+    <h2>Cyclic reading of multiple variables with sumcommando!</h2>
+    <table>
+        <tr>
+            <td>MAIN.byteValue:</td>
+            <td id="td_byteValue"></td>
+        </tr>
+        <tr>
+            <td>MAIN.wordValue:</td>
+            <td id="td_wordValue"></td>
+        </tr>
+        <tr>
+            <td>MAIN.dwordValue:</td>
+            <td id="td_dwordValue"></td>
+        </tr>
+        <tr>
+            <td>MAIN.sintValue:</td>
+            <td id="td_sintValue"></td>
+        </tr>
+        <tr>
+            <td>MAIN.intValue:</td>
+            <td id="td_intValue"></td>
+        </tr>
+        <tr>
+            <td>MAIN.dintValue:</td>
+            <td id="td_dintValue"></td>
+        </tr>
+        <tr>
+            <td>MAIN.realValue:</td>
+            <td id="td_realValue"></td>
+        </tr>
+        <tr>
+            <td>MAIN.lrealValue:</td>
+            <td id="td_lrealValue"></td>
+        </tr>
+        <tr>
+            <td>MAIN.myValue:</td>
+            <td id="td_myValue"></td>
+        </tr>
+        <tr>
+            <td>MAIN.myValue2:</td>
+            <td id="td_myValue2"></td>
+        </tr>
+    </table>
+    <div id="div_log"></div>
+</body>
+</html>
